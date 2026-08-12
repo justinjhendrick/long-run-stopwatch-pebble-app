@@ -1,0 +1,26 @@
+{
+  "name": "Long Run Stopwatch",
+  "author": "justinjhendrick",
+  "version": "1.0.0",
+  "keywords": ["pebble-app"],
+  "private": true,
+  "dependencies": {},
+  "pebble": {
+    "displayName": "Long Run Stopwatch",
+    "uuid": "dd7bb326-8c92-47b7-a061-c81fe11c591c",
+    "sdkVersion": "3",
+    "enableMultiJS": true,
+    "targetPlatforms": [
+      "emery"
+    ],
+    "watchapp": {
+      "watchface": false
+    },
+    "messageKeys": [],
+    "resources": {
+      "media": [
+        {"name":  "CFONT_90", "file": "fonts/Antonio-Regular.ttf", "characterRegex": "[ :0-9apm]", "type": "font" }
+      ]
+    }
+  }
+}
