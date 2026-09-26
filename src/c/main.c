@@ -1,9 +1,11 @@
 #include <pebble.h>
 
 #define BUFFER_LEN (40)
+#define MINUTE_IN_MS (60 * 1000)
 
 static Window* s_window;
-static Layer* s_layer;
+static Layer* s_top_layer;
+static Layer* s_bot_layer;
 static time_t s_start;
 static char s_buffer[BUFFER_LEN];
 static GFont s_font_lg;
@@ -34,53 +36,75 @@ static void draw_text(GContext* ctx, const char* buf, GFont font, GRect bbox, in
   graphics_draw_text(ctx, buf, font, fixed, GTextOverflowModeFill, align, NULL);
 }
 
-static void update_layer(Layer* layer, GContext* ctx) {
+static void update_top_layer(Layer* layer, GContext* ctx) {
+  APP_LOG(APP_LOG_LEVEL_DEBUG, "top");
+  // Elapsed run time
   GRect bounds = layer_get_bounds(layer);
   graphics_context_set_fill_color(ctx, GColorBlack);
   graphics_fill_rect(ctx, bounds, 0, GCornerNone);
 
-  GRect upper_bbox = GRect(bounds.origin.x, bounds.origin.y, bounds.size.w, bounds.size.h / 2);
-  GRect lower_bbox = GRect(bounds.origin.x, bounds.origin.y + bounds.size.h / 2, bounds.size.w, bounds.size.h / 2);
-
-  // Elapsed run time
   time_t now = time(NULL);
   int elapsed_min = (now - s_start) / 60;
   int hours = elapsed_min / 60;
   int minutes = elapsed_min % 60;
   graphics_context_set_text_color(ctx, GColorWhite);
   snprintf(s_buffer, BUFFER_LEN, "%02d:%02d", hours, minutes);
-  draw_text(ctx, s_buffer, s_font_lg, upper_bbox, -5, GTextAlignmentCenter);
+  draw_text(ctx, s_buffer, s_font_lg, bounds, -5, GTextAlignmentCenter);
+}
+
+static void update_bot_layer(Layer* layer, GContext* ctx) {
+  APP_LOG(APP_LOG_LEVEL_DEBUG, "bot");
+  GRect bounds = layer_get_bounds(layer);
+  graphics_context_set_fill_color(ctx, GColorWhite);
+  graphics_fill_rect(ctx, bounds, 0, GCornerNone);
 
   // Time of day
+  time_t now = time(NULL);
   struct tm* local = localtime(&now);
   if (clock_is_24h_style()) {
     strftime(s_buffer, BUFFER_LEN, "%H:%M", local);
   } else {
     strftime(s_buffer, BUFFER_LEN, "%l:%M", local);
   }
-  graphics_context_set_fill_color(ctx, GColorWhite);
-  graphics_fill_rect(ctx, lower_bbox, 0, GCornerNone);
   graphics_context_set_text_color(ctx, GColorBlack);
-  draw_text(ctx, s_buffer, s_font_lg, lower_bbox, -5, GTextAlignmentCenter);
+  draw_text(ctx, s_buffer, s_font_lg, bounds, -5, GTextAlignmentCenter);
+}
+
+static void elapsed_minute_handler(void* unused) {
+  app_timer_register(MINUTE_IN_MS, elapsed_minute_handler, NULL);
+  layer_mark_dirty(s_top_layer);
 }
 
 static void tick_handler(struct tm* now, TimeUnits units_changed) {
-  layer_mark_dirty(s_layer);
+  layer_mark_dirty(s_bot_layer);
 }
 
 static void window_load(Window* window) {
   Layer* window_layer = window_get_root_layer(window);
   GRect bounds = layer_get_bounds(window_layer);
-  s_layer = layer_create(bounds);
-  layer_set_update_proc(s_layer, update_layer);
-  layer_add_child(window_layer, s_layer);
+  int x = bounds.origin.x;
+  int y = bounds.origin.y;
+  int hh = bounds.size.h / 2;
+  int w = bounds.size.w;
+  GRect top_bounds = GRect(x, y, w, hh);
+  GRect bot_bounds = GRect(x, y + hh, w, hh);
+  s_bot_layer = layer_create(bot_bounds);
+  s_top_layer = layer_create(top_bounds);
+  layer_set_update_proc(s_bot_layer, update_bot_layer);
+  layer_set_update_proc(s_top_layer, update_top_layer);
+  layer_add_child(window_layer, s_bot_layer);
+  layer_add_child(window_layer, s_top_layer);
+
+  app_timer_register(MINUTE_IN_MS, elapsed_minute_handler, NULL);
   tick_timer_service_subscribe(MINUTE_UNIT, tick_handler);
 }
 
 static void window_unload(Window *window) {
   tick_timer_service_unsubscribe();
-  layer_destroy(s_layer);
-  s_layer = NULL;
+  layer_destroy(s_top_layer);
+  s_top_layer = NULL;
+  layer_destroy(s_bot_layer);
+  s_bot_layer = NULL;
 }
 
 static void init(void) {
